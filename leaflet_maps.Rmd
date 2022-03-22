@@ -1,0 +1,130 @@
+---
+title: "Leaflet Maps"
+output:
+  html_document:
+    anchor_sections: true
+    code_folding: "hide"
+    css: [assets/style.css, assets/grid.css]
+    df_print: "paged"
+    includes:
+      before_body: assets/style.html
+      after_body: assets/maps.html
+    libs_dir: public/libs
+    math_method:
+      engine: katex
+      url: './assets/'
+    self_contained: TRUE
+    toc: true
+    toc_depth: 6
+    toc_float:
+      collapse: false
+params:
+  rebuild:
+    value: FALSE
+  t_start:
+    input: text
+    value: ''
+    placeholder: '01-01-2000 00:00:00.000'
+  t_end:
+    input: text
+    value: ''
+    placeholder: '01-01-2000 00:00:00.000'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(digits.secs = 3)
+library(knitr)
+source('utils/widgets.R')
+source('utiles/load_cache_labels.R')
+
+knitr::opts_chunk$set(results = 'hold')
+knitr::opts_chunk$set(fig.path = paste0('public/assets/img/data-cleaning'))
+
+if (!dir.exists('public/assets/')) dir.create('public/assets/', recursive = T)
+system("cp -u assets/style.css assets/grid.css public/assets/")
+```
+
+```{r setup-2, include=FALSE}
+# here are things that don't break execution of code chunks b/c setup gets ran by default 
+
+# sets up a convention to extract chunk labels for loading cached chunks outisde of rendering
+# if you don't have the most up to date list of labels for soem reason, throw `stop()` below this line, then render
+if (!dir.exists('chunk_labels')) dir.create('chunk_labels')
+writeLines(knitr::all_labels(cache == TRUE), con = 'chunk_labels/data_cleaning.txt')
+```
+
+## Metadata
+
+```{r metadata, cache = TRUE}
+# WAC data ----
+# wac_csv.csv is wac_poly_data.csv w/ lat 92 changed to 90 in heat_mapdiff
+d_wac_csv <- fread('data/wac/wac_csv/wac_csv.csv')
+
+lons_csv <- c('top.left.lon', 'top.right.lon', 'bottom.right.lon', 'bottom.left.lon')
+lats_csv <- c('top.left.lat', 'top.right.lat', 'bottom.right.lat', 'bottom.left.lat')
+
+d_wac_csv[, coord_lon := rep(lons_csv, .N/4),]
+d_wac_csv[, coord_lat := rep(lats_csv, .N/4),]
+
+d_wac_lat <- dcast.data.table(d_wac_csv, ID+ID_SUB~coord_lat, value.var = "lat")
+d_wac_lon <- dcast.data.table(d_wac_csv, ID+ID_SUB~coord_lon, value.var = "lon")
+
+d_wac <- merge(d_wac_lat, d_wac_lon, by = c('ID', 'ID_SUB'))
+
+d_wac[, `:=`(
+  geometry = paste0(
+    "POLYGON((",
+    top.left.lon, " ", top.left.lat, ", ",
+    top.right.lon, " ", top.right.lat, ", ",
+    bottom.right.lon, " ", bottom.right.lat, ", ",
+    bottom.left.lon, " ", bottom.left.lat, ", ",
+    top.left.lon, " ", top.left.lat,
+    "))"
+  )
+)]
+
+d_sf_wac <- st_as_sf(d_wac, wkt = 'geometry', crs = 4326)
+# here we create an sf data.frame with only unique WACs
+# so we create MULTIPOLYGONs for WACs that pass the date boundary (lons crossing over 180)
+# this magically turns our geometry into a MULTIPOLYGON type
+d_sf_wac_edge <- d_sf_wac %>% group_by(ID) %>% summarise(counts = n()) %>% filter(counts > 1)
+# 1851 rpws - one for each WAC :)
+d_sf_wac <- bind_rows(
+  d_sf_wac %>% filter(!ID %in% d_sf_wac_edge$ID),
+  d_sf_wac_edge
+) %>% arrange(ID)
+
+# Country data ----
+d_sf_ne <- rnaturalearth::ne_countries(scale = 50, returnclass = "sf")
+```
+
+
+## Map
+
+```{r wmap, cache=TRUE, cache.extra=file.mtime('R/leaflet.R'), warning=FALSE}
+tic()
+
+l_map <- list(
+  map1 = leaflet_map(d_sf_wac, d_sf_ne, basemap = list(osm="raster"), pal_scale = "linear", pal_reverse = F),
+  map2 = leaflet_map(d_sf_wac, d_sf_ne, basemap = list(osm="raster"), pal_scale = "linear", pal_reverse = F),
+  map3 = leaflet_map(d_sf_wac, d_sf_ne, basemap = list(osm="raster"), pal_scale = "linear", pal_reverse = F),
+  map4 = leaflet_map(d_sf_wac, d_sf_ne, basemap = list(osm="raster"), pal_scale = "linear", pal_reverse = F)
+)
+
+files <- paste0("public/widgets/", as.list(names(l_map)), ".html")
+
+for (i in 1:length(l_map)) {
+  saveWidgetFix(widget = l_map[[i]], file = files[i])
+}
+
+toc()
+```
+
+```{r wmap-i, echo=FALSE, cache=TRUE, dependson='wmap'}
+showWidget(files[1], height = "720px")
+showWidget(files[2], height = "720px")
+showWidget(files[3], height = "720px")
+showWidget(files[4], height = "720px")
+```
+

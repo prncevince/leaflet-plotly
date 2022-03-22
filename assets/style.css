@@ -1,0 +1,11 @@
+.container-fluid.main-container {
+  max-width: inherit;
+}
+
+iframe {
+  border: none;
+}
+
+div.tocify#TOC {
+  max-width; none;
+}
