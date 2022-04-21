@@ -54,6 +54,18 @@ if (!dir.exists('chunk_labels')) dir.create('chunk_labels')
 writeLines(knitr::all_labels(cache == TRUE), con = 'chunk_labels/data_cleaning.txt')
 ```
 
+```{r print_df, cache = TRUE}
+print_df <- function(d) {
+  d %>%
+    kbl() %>%
+    kable_styling(
+      bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+      full_width = FALSE
+    ) %>%
+    scroll_box(width = "100%")
+}
+```
+
 ## Metadata
 
 ```{r metadata, cache = TRUE}
