@@ -142,7 +142,7 @@ leaflet_map <- function(
       values = ~n, "bottomleft", opacity = 0.7
     ) %>%
     addLegend(
-      data = d_sf_reg, group = "WAC",
+      data = d_sf_reg, group = "Region",
       pal = pal_reg, title = paste0("Image Count", legend),
       values = ~n, "bottomleft", opacity = 0.7
     ) %>%
